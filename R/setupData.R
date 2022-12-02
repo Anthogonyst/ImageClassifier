@@ -19,6 +19,10 @@ ReadCifarData <- function(filepath = CifarTrain(), simplify = TRUE) {
     imageCount = 10000L, imageLabels = 1L
   )
   
+  if (length(cifar) == 0) {
+    stop("No images were extracted.")
+  }
+  
   if (simplify) {
     invisible(ThreeToTwoDims(UnlistDims(cifar)))
   } else {
