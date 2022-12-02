@@ -1,19 +1,21 @@
 
-CifarTrain <- function(path = "data/cifar-10-binary/cifar-10-batches-bin/", pattern = "data_batch.*") {
-  list.files(normalizePath(path), pattern, full.names = TRUE)
+library(here)
+
+CifarTrain <- function(filepath = "data/cifar-10-binary/cifar-10-batches-bin/", pattern = "data_batch.*") {
+  list.files(here::here(filepath), pattern, full.names = TRUE)
 }
 
-CifarTest <- function(path = "data/cifar-10-binary/cifar-10-batches-bin/", pattern = "test_batch.*") {
-  list.files(normalizePath(path), pattern, full.names = TRUE)
+CifarTest <- function(filepath = "data/cifar-10-binary/cifar-10-batches-bin/", pattern = "test_batch.*") {
+  list.files(here::here(filepath), pattern, full.names = TRUE)
 }
 
-CifarLabelnames <- function(path = "data/cifar-10-binary/cifar-10-batches-bin/", file = "batches.meta.txt") {
-  read.table(normalizePath(paste0(path, "/", file)))
+CifarLabelnames <- function(filepath = "data/cifar-10-binary/cifar-10-batches-bin/", file = "batches.meta.txt") {
+  read.table(here::here(paste0(filepath, "/", file)))
 }
 
-ReadCifarData <- function(path = CifarTrain(), simplify = TRUE) {
+ReadCifarData <- function(filepath = CifarTrain(), simplify = TRUE) {
   cifar = sapply(
-    path, ScanBinary, Image, imagePixels = 1024L, imageChannels = 3L, 
+    filepath, ScanBinary, Image, imagePixels = 1024L, imageChannels = 3L, 
     imageCount = 10000L, imageLabels = 1L
   )
   
