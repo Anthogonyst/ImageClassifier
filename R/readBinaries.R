@@ -11,8 +11,7 @@ Image <- function(pos, conn, bytes, repeats, preReadOffset, ...) {
 
 Label <- function(pos, conn, ...) {
   seek(conn, pos, origin = "start")
-  # readBin(Label) + 1 to conform starting value on 1 instead of 0; optional
-  readBin(conn, integer(), size = 1L, n = 1L, endian = "big") + 1L
+  readBin(conn, integer(), size = 1L, n = 1L, endian = "big")
 }
 
 MultiLabel <- function(pos, conn, bytes, repeats, preReadOffset, ...) {
