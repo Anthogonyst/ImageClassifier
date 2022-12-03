@@ -16,7 +16,7 @@
 #' Neither includes pickup trucks.
 #' \url{https://www.cs.toronto.edu/~kriz/cifar.html}.
 #'
-#' @format A matrix with 1024x3x50000 dimensions, representing pixels, channel, and count:
+#' @format A matrix with 1024x3xM dimensions, representing pixels, channel, and count:
 #' \describe{
 #'   \item{x}{imagePixels, the value 0 to 255 of one pixel, top to bottom, left to right}
 #'   \item{y}{imageChannels, three columns correspond to the rgb channels in an image}
@@ -43,10 +43,10 @@
 #' Neither includes pickup trucks.
 #' \url{https://www.cs.toronto.edu/~kriz/cifar.html}.
 #'
-#' @format A matrix with 3072x50000 dimensions, representing pixels, channel, and count:
+#' @format A matrix with Mx3072 dimensions, representing pixels, channel, and count:
 #' \describe{
-#'   \item{x}{image, the value 0 to 255 of one pixel, top to bottom, left to right, 1024 red then 1024 green then 1024 blue}
-#'   \item{y}{imageCount, separates each image to a layer}
+#'   \item{x}{imageCount, separates each image to a layer}
+#'   \item{y}{image, the value 0 to 255 of one pixel, top to bottom, left to right, 1024 red then 1024 green then 1024 blue}
 #' }
 #' @source Alex Krizhevsky, 2009 \url{https://www.cs.toronto.edu/~kriz/learning-features-2009-TR.pdf}.
 "cifar10"
@@ -69,7 +69,7 @@
 #' Neither includes pickup trucks.
 #' \url{https://www.cs.toronto.edu/~kriz/cifar.html}.
 #'
-#' @format A matrix with 50000x1 dimensions, representing index and label:
+#' @format A matrix with Mx1 dimensions, representing index and label:
 #' \describe{
 #'   \item{x}{index, the corresponding index for the cifar10 data}
 #'   \item{y}{label, values 1 through 10 corresponding to the ten classes}
