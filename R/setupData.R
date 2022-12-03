@@ -33,3 +33,21 @@ ReadCifarData <- function(filepath = CifarTrain(), simplify = TRUE) {
 ReadCifarLabels <- function(path = CifarTrain()) {
   invisible(sapply(path, ScanBinary, Label))
 }
+
+ReadCifarMultiLabels <- function(filepath = CifarTrain(), imagePixels = 1024L, imageLabels = 1L) {
+  size = CountImagesByPixel(filepath, imagePixels, 3L, imageLabels)
+  
+  labels = sapply(
+    filepath, ScanBinary, MultiLabel, imagePixels = imagePixels, imageChannels = 3L, 
+    imageCount = 10000L, imageLabels = imageLabels
+  )
+  
+  if (length(labels) == 0) {
+    stop("No labels were extracted.")
+  }
+  
+  labelsDf = ThreeToTwoDims(UnlistDims(labels))
+  names(dim(labelsDf)) = c("index", "imageCount")
+  
+  invisible(labelsDf)
+}
