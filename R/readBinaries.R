@@ -15,6 +15,14 @@ Label <- function(pos, conn, ...) {
   readBin(conn, integer(), size = 1L, n = 1L, endian = "big") + 1L
 }
 
+MultiLabel <- function(pos, conn, bytes, repeats, preReadOffset, ...) {
+  seek(conn, pos, origin = "start")
+  
+  array(sapply(seq_len(preReadOffset), function(x) {
+    as.integer(readBin(conn, raw(), size = 1L, n = 1L, endian = "big"))
+  }), dim = c(index = 1, label = preReadOffset))
+}
+
 FindPos <- function(len, size = 1024L*3L + 1L) {
   seq.int(0L, size*len - 1L, size)
 }
