@@ -9,8 +9,9 @@ CifarTest <- function(filepath = "data/cifar-10-binary/cifar-10-batches-bin/", p
   list.files(here::here(filepath), pattern, full.names = TRUE)
 }
 
-CifarLabelnames <- function(filepath = "data/cifar-10-binary/cifar-10-batches-bin/", file = "batches.meta.txt") {
-  read.table(here::here(paste0(filepath, "/", file)))
+CifarLabelnames <- function(filepath = "data/cifar-10-binary/cifar-10-batches-bin/", pattern = "batches.meta.txt") {
+  lapply(list.files(here::here(filepath), pattern, full.names = TRUE), readLines) %>%
+    sapply(function(x) { x[x != ""] }, simplify = FALSE)
 }
 
 ReadCifarData <- function(filepath = CifarTrain(), simplify = TRUE) {
