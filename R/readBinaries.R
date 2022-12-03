@@ -59,6 +59,6 @@ UnlistDims <- function(binaryLists) {
 }
 
 ThreeToTwoDims <- function(binMatrix) {
-  array(binMatrix, dim = c(image = prod(rev(dim(binMatrix))[-1]), imageCount = rev(dim(binMatrix))[1]))
+  t(array(binMatrix, dim = c(image = prod(rev(dim(binMatrix))[-1]), imageCount = rev(dim(binMatrix))[1])))
 }
 
