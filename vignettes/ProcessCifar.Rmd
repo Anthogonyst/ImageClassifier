@@ -1,0 +1,369 @@
+---
+title: "ProcessCifar"
+author: "Anthony Arroyo"
+date: "12/3/2022"
+output: 
+  html_document:
+    code_folding: show
+    highlight: espresso
+    number_sections: true
+    smart: false
+    theme: sandstone
+    toc: true
+    toc_float: 
+      collapsed: false
+      smooth_scroll: false
+---
+
+# Abstract
+
+We develop a data pipeline capable of processing pictures for image classification purposes.
+Our motive for this technology is to identify objects in scenarios such as televised sports and security.
+
+```{r setup, include=FALSE, warning=FALSE}
+library(magrittr)
+library(here)
+library(reshape2)
+library(ggplot2)
+library(dplyr)
+```
+
+# Datasets
+
+Image classification is usually started with microsized images and scaled up from there.
+
+## CIFAR-10
+
+The CIFAR-10 dataset is a well known data consisting of ten different classes of color images.
+These classes include automobiles, deer, and horses.
+The images have very little processing and are scaled down to 32x32 pixels large.
+There are 60 thousand images, of which they are proportioned evenly between all 10 classes.
+Additionally, the order in the training set is random and resampling is always good practice.
+
+## CIFAR-100
+
+The CIFAR-100 dataset is a sister dataset to the original CIFAR-10 dataset.
+It has largely the same specifications except it has two labels, a major and minor one.
+
+# Exploratory Data Analysis
+
+For this project, we use the binary version of the files so the following paths are provided.
+
+```{r, class.source = 'fold-hide'}
+CifarTrain <- function(filepath = "data/cifar-10-binary/cifar-10-batches-bin/", pattern = "data_batch.*") {
+  list.files(here::here(filepath), pattern, full.names = TRUE)
+}
+
+CifarTest <- function(filepath = "data/cifar-10-binary/cifar-10-batches-bin/", pattern = "test_batch.*") {
+  list.files(here::here(filepath), pattern, full.names = TRUE)
+}
+
+CifarLabelnames <- function(filepath = "data/cifar-10-binary/cifar-10-batches-bin/", pattern = "batches.meta.txt") {
+  lapply(list.files(here::here(filepath), pattern, full.names = TRUE), readLines) %>%
+    sapply(function(x) { x[x != ""] }, simplify = FALSE)
+}
+
+Cifar100Path <- function() {
+  "data/cifar-100-binary/cifar-100-binary"
+}
+```
+
+## File Specifications
+
+According to the CIFAR-10 binary specification, each image has one label and 3072 pixels embedded in each batch file.
+We can confirm that each batch contains ten thousand images by checking the file properties.
+Two implementations are shown below to verify this.
+
+```{r}
+CountImages <- function(imgPath, rawSize = 3073L) {
+  file.size(imgPath) / rawSize
+}
+
+CountImagesByPixel <- function(imgPath, imagePixels = 1024L, imageChannels = 3L, imageLabels = 1L) {
+  file.size(imgPath) / (imagePixels*imageChannels + imageLabels)
+}
+
+CountImages(CifarTrain(), 1 + 3072)
+CountImagesByPixel(CifarTrain(), 1024, 3, 1)
+```
+
+## Pointer Arithmetic
+
+Since our images are concatenated together, we can use some arithmetic to determine the binary position.
+This will help set our pointer when we read each image into a matrix.
+
+```{r}
+FindPos <- function(len, size = 1024L*3L + 1L) {
+  seq.int(0L, size*len - 1L, size)
+}
+
+head(FindPos(file.size(CifarTrain()[1]), 3073))
+```
+
+## Retrieving Labels
+
+We can verify that this works as intended by first defining our scanner and then how to interop.
+Specifically, we have to read a secondary file in the metadata to get the names of our labels.
+In this scenario, the row number or index corresponds to the class id out of convenience.
+Otherwise, we would have to do a left join here to accomplish the same goal.
+After reading the binary data, we have a 1xM matrix for all of the labels in CIFAR-10.
+This will actually be vectorized to read all of the files later instead of only one.
+
+```{r}
+NumbersToLabels <- function(m, labels = CifarLabelnames()) {
+  mapply(m, labels, SIMPLIFY = FALSE, FUN = function(labelsCol, labelnames) {
+    labelsVector = unlist(labelnames, use.names = FALSE)
+    
+    if (any(labelsCol >= length(labelsVector))) {
+      warning("Plus one or overflow error")
+    }
+    
+    clamp = (labelsCol %% length(labelsVector)) + 1L
+    labelsVector[clamp]
+  })
+}
+
+Label <- function(pos, conn, ...) {
+  seek(conn, pos, origin = "start")
+  readBin(conn, integer(), size = 1L, n = 1L, endian = "big")
+}
+
+imageFile <- file(CifarTrain()[1], "rb")
+cifarLabels = sapply(FindPos(10000, 3073), Label, imageFile) %>%
+  data.frame(labels = .) %>%
+    NumbersToLabels(., CifarLabelnames())
+invisible(close(imageFile))
+
+head(cifarLabels[[1]])
+```
+
+## Retrieving Images
+
+Before we vectorize that function, let's also take a look at our image data.
+As discussed, the image is 3072 pixels large.
+This corresponds to 1024 red bytes, 1024 green bytes, and 1024 blue bytes.
+Our definition to parse this creates a three dimensional matrix that organizes all of this data.
+
+```{r}
+Image <- function(pos, conn, bytes, repeats, preReadOffset, ...) {
+  seek(conn, pos, origin = "start")
+  seek(conn, preReadOffset, origin = "current")
+  
+  array(sapply(seq_len(repeats), function(x) {
+    as.integer(readBin(conn, raw(), size = 1L, n = bytes, endian = "big"))
+  }), dim = c(imagePixels = bytes, imageChannels = repeats))
+}
+
+imageFile <- file(CifarTrain()[1], "rb")
+cifarData = lapply(FindPos(10000, 3073), Image, imageFile, 1024L, 3L, 1L)
+invisible(close(imageFile))
+
+str(cifarData[1:6])
+```
+
+# Data Transformations
+
+For our data, it produces a matrix with 1024x3xM dimensions, representing pixels, channel, and count:
+ x such that imagePixels, the value 0 to 255 of one pixel, top to bottom, left to right;
+ y such that imageChannels, three columns correspond to the rgb channels in an image;
+ z such that imageCount, separates each image to a layer.
+
+```{r}
+ConformDims <- function(x, useNames = TRUE) {
+  val = c(imagePixels = dim(x[[1]])[1], imageChannels = dim(x[[1]])[2], imageCount = length(x))
+  
+  if (useNames) {
+    names(val) = c("imagePixels", "imageChannels", "imageCount")
+  }
+  
+  return(val)
+}
+
+UnlistDims <- function(binaryLists) {
+  array(unlist(binaryLists, TRUE), ConformDims(binaryLists))
+}
+
+UnlistDims(cifarData) %>%
+  str()
+```
+
+## Transform to Filter Green
+
+In order to fully appreciate what this data structure is, let's suppose that we wanted to filter green.
+This data structure can do that extremely easily because the green channel is in m[,2,] here.
+
+```{r}
+FilterGreen <- function(m) {
+  m[,2,] = 0
+  m
+}
+
+UnlistDims(cifarData) %>%
+  FilterGreen(.) %>%
+    .[,,1] %>%
+      head()
+```
+
+## Visualization of Green Filter
+
+Just in case you are skeptical, we can quickly visualize the distribution of color present.
+Shown in the graph is the three different color channels: red, green, and blue.
+
+```{r}
+CoerceLabel <- function(m, groupname) {
+  df = mapply(1:3, c("red", "green", "blue"), FUN = function(x, y) {
+    values = list(as.vector(m[,x,]))
+    names(values) = y
+    
+    values
+  }) %>%
+    do.call(cbind, .) %>%
+      data.frame(.) %>%
+        dplyr::mutate(group = groupname)
+}
+
+set.seed(8675309) %>%
+  { rbind(
+    UnlistDims(cifarData) %>% 
+      CoerceLabel("Pre Green Filter"),
+    UnlistDims(cifarData) %>% 
+      FilterGreen(.) %>% 
+        CoerceLabel("Post Green Filter")
+  ) } %>%
+    reshape2::melt(id = "group") %>%
+      .[sample.int(nrow(.), 1000), ] %>%
+        ggplot2::ggplot(.) +
+        ggplot2::aes(x = variable, y = value, fill = group) +
+        ggplot2::geom_boxplot(shape = "circle") +
+        ggplot2::scale_fill_hue(direction = 1) +
+        ggplot2::theme_minimal()
+```
+
+## Preparing for Modeling
+
+Since most models take two dimensional data like data frames, we can reduce the dimensions from three to two.
+This gives us the original dimensions present in the binary file.
+However, since this process is separate, we can keep all of our transforms from previously.
+
+```{r}
+ThreeToTwoDims <- function(binMatrix) {
+  t(array(binMatrix, dim = c(image = prod(rev(dim(binMatrix))[-1]), imageCount = rev(dim(binMatrix))[1])))
+}
+
+modelReadyCifar = UnlistDims(cifarData) %>%
+  FilterGreen(.) %>%
+    ThreeToTwoDims(.)
+
+str(modelReadyCifar)
+```
+
+# Analysis and Output
+
+Finally, let's vectorize our whole process now that we know that everything works as intended.
+We want to vectorize the reading of files first. 
+Afterwards, we double check that our interop functions are distinct and can handle unintentional args.
+Thus, we coerce everything to follow a template and we are done.
+
+```{r}
+ScanBinary <- function(imgPath, FUN = Image, imagePixels = 1024L, imageChannels = 3L, imageCount = 10000L, imageLabels = 1L) {
+  conn <- file(imgPath, "rb")
+  bytePos = FindPos(imageCount, imagePixels*imageChannels + imageLabels)
+  images = lapply(bytePos, FUN, conn, bytes = imagePixels, repeats = imageChannels, preReadOffset = imageLabels)
+  close(conn)
+  
+  return(images)
+}
+
+ReadCifarData <- function(filepath = CifarTrain(), simplify = TRUE) {
+  cifar = sapply(
+    filepath, ScanBinary, Image, imagePixels = 1024L, imageChannels = 3L, 
+    imageCount = 10000L, imageLabels = 1L
+  )
+  
+  if (length(cifar) == 0) {
+    stop("No images were extracted.")
+  }
+  
+  if (simplify) {
+    invisible(ThreeToTwoDims(UnlistDims(cifar)))
+  } else {
+    invisible(UnlistDims(cifar))
+  }
+}
+
+ReadCifarLabels <- function(path = CifarTrain()) {
+  invisible(sapply(path, ScanBinary, Label))
+}
+
+finalLabels = ReadCifarLabels(CifarTest()) %>%
+  unlist() %>%
+    data.frame(labels = .) %>%
+      NumbersToLabels()
+
+finalResults = ReadCifarData(CifarTest(), simplify = FALSE) %>%
+  FilterGreen(.) %>%
+    ThreeToTwoDims(.) %>%
+      data.frame(.) %>%
+        cbind(finalLabels, .)
+
+str(finalResults, list.len = 6)
+finalResults[1:6, 1:6]
+```
+
+## Verification of portability
+
+From the same resource, we can also get the CIFAR-100 dataset with 100 classes and 2 sets of labels.
+These are also 32x32 images so theoretically, we should be able to get the same results with minor changes.
+One thing of note, we have to write an additional labeling function to make it vectorized.
+Afterwards, it works exactly as expected.
+
+```{r}
+MultiLabel <- function(pos, conn, bytes, repeats, preReadOffset, ...) {
+  seek(conn, pos, origin = "start")
+  
+  array(sapply(seq_len(preReadOffset), function(x) {
+    as.integer(readBin(conn, raw(), size = 1L, n = 1L, endian = "big"))
+  }), dim = c(index = 1, label = preReadOffset))
+}
+
+ReadCifarMultiLabels <- function(filepath = CifarTrain(), imagePixels = 1024L, imageLabels = 1L) {
+  size = CountImagesByPixel(filepath, imagePixels, 3L, imageLabels)
+  
+  labels = sapply(
+    filepath, ScanBinary, MultiLabel, imagePixels = imagePixels, imageChannels = 3L, 
+    imageCount = size, imageLabels = imageLabels
+  )
+  
+  if (length(labels) == 0) {
+    stop("No labels were extracted.")
+  }
+  
+  labelsDf = ThreeToTwoDims(UnlistDims(labels))
+  names(dim(labelsDf)) = c("index", "imageCount")
+  
+  invisible(labelsDf)
+}
+
+proofFinalLabels = ReadCifarMultiLabels(CifarTest(filepath = Cifar100Path(), pattern = "test.bin"), imageLabels = 2L) %>%
+  unlist() %>%
+    data.frame(labels = .) %>%
+      NumbersToLabels(., CifarLabelnames(filepath = Cifar100Path(), pattern = ".*label_names.txt")) 
+
+proofFinalResults = ReadCifarData(CifarTest(filepath = Cifar100Path(), pattern = "test.bin"), simplify = FALSE) %>%
+  FilterGreen(.) %>%
+    ThreeToTwoDims(.) %>%
+      data.frame(.) %>%
+        cbind(proofFinalLabels, .)
+
+str(proofFinalResults, list.len = 6)
+proofFinalResults[1:6, 1:6]
+```
+
+# References
+
+CIFAR-10 and CIFAR-100 are both due credit to Alex Krizhevsky, 2009.
+The tech report can be accessed here to find the dataset and methodology: 
+Learning Multiple Layers of Features from Tiny Images, 
+https://www.cs.toronto.edu/~kriz/learning-features-2009-TR.pdf
+An additional website owned by them can be found at this link:
+https://www.cs.toronto.edu/~kriz/cifar.html
