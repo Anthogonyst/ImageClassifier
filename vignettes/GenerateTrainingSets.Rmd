@@ -1,0 +1,43 @@
+---
+title: "Compile RDA Files"
+author: "Anthony A"
+date: "11/28/2022"
+---
+
+```{r setup, include=FALSE}
+library(here)
+invisible(lapply(list.files(here::here("R"), "\\.R$", full.names = TRUE), source))
+```
+
+### Generating the training data
+
+```{r, echo=FALSE}
+raw_cifar10 = ReadCifarData(CifarTrain(), simplify = FALSE)
+cifar10 = ReadCifarData(CifarTrain(), simplify = TRUE)
+cifar10_labels = ReadCifarLabels(CifarTrain())
+```
+
+### Saving the training data in RDA
+
+```{r, echo=FALSE}
+save(raw_cifar10, file = paste0(here::here("data"), "/raw_cifar10.rda"))
+save(cifar10, file = paste0(here::here("data"), "/cifar10.rda"))
+save(cifar10_labels, file = paste0(here::here("data"), "/cifar10_labels.rda"))
+```
+
+### Generating the testing data
+
+```{r, echo=FALSE}
+test_raw_cifar10 = ReadCifarData(CifarTest(), simplify = FALSE)
+test_cifar10 = ReadCifarData(CifarTest(), simplify = TRUE)
+test_cifar10_labels = ReadCifarLabels(CifarTest())
+```
+
+### Saving the testing data in RDA
+
+```{r, echo=FALSE}
+save(test_raw_cifar10, file = paste0(here::here("data"), "/test_raw_cifar10.rda"))
+save(test_cifar10, file = paste0(here::here("data"), "/test_cifar10.rda"))
+save(test_cifar10_labels, file = paste0(here::here("data"), "/test_cifar10_labels.rda"))
+```
+
