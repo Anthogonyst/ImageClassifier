@@ -1,8 +1,14 @@
-NumbersToLabels <- function(m, labels) {
-  labelsVector = unlist(labels, use.names = FALSE)
-  
-  clamp = apply(m, 2, function(x) { (x %% length(labelsVector)) + 1L }) %>%
-  apply(clamp, 2, function(y) { labelsVector[y] })
+NumbersToLabels <- function(m, labels = CifarLabelnames()) {
+  mapply(m, labels, SIMPLIFY = FALSE, FUN = function(labelsCol, labelnames) {
+    labelsVector = unlist(labelnames, use.names = FALSE)
+    
+    if (any(labelsCol >= length(labelsVector))) {
+      warning("Plus one or overflow error")
+    }
+    
+    clamp = (labelsCol %% length(labelsVector)) + 1L
+    labelsVector[clamp]
+  })
 }
 
 BindData <- function(data, labels, name) {
